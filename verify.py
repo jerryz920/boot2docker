@@ -18,10 +18,12 @@ for d, sd, fs in os.walk(target):
         name=os.path.join(d, f)
         res = os.lstat(name)
         if stat.S_ISREG(res.st_mode):
-            subprocess.call(["sha1sum", os.path.join(d,f)])
-        if stat.S_ISLNK(res.st_mode):
+            out=subprocess.check_output(["sha1sum", os.path.join(d,f)])
+            data = out.split(' ')
+            print("%s %s" % (data[0], f))
+        elif stat.S_ISLNK(res.st_mode):
             real_name = os.readlink(name)
-            print("%s %s" % (real_name, name))
+            print("%s %s" % (real_name, f))
 
 
 
