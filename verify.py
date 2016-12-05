@@ -2,6 +2,7 @@
 
 import os
 import sys
+import stat
 import subprocess
 
 if len(sys.argv) > 1:
@@ -14,7 +15,16 @@ else:
 for d, sd, fs in os.walk(target):
     # just calculate the file checksum
     for f in fs:
-        subprocess.call(["sha1sum", os.path.join(d,f)])
+        name=os.path.join(d, f)
+        res = os.lstat(name)
+        if stat.S_IFREG(res):
+            subprocess.call(["sha1sum", os.path.join(d,f)])
+        if stat.S_IFLNK(res):
+            real_name=name
+            while stat.S_IFLNK(res):
+                real_name=os.readlink(real_name)
+                res = os.lstat(real_name)
+            print("%s %s" % (real_name, name))
 
 
 
