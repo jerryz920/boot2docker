@@ -146,11 +146,8 @@ RUN cd $ROOTFS && zcat /tcl_rootfs.gz | cpio -f -i -H newc -d --no-absolute-file
 
 # Extract ca-certificates
 RUN set -x \
-#  TCL changed something such that these need to be extracted post-install
 	&& chroot "$ROOTFS" sh -xc 'ldconfig && /usr/local/tce.installed/openssl' \
-#  Docker looks for them in /etc/ssl
 	&& ln -sT ../usr/local/etc/ssl "$ROOTFS/etc/ssl" \
-#  a little testing is always prudent
 	&& cp "$ROOTFS/etc/resolv.conf" resolv.conf.bak \
 	&& cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" \
 	&& chroot "$ROOTFS" curl -fsSL 'https://www.google.com' -o /dev/null \
@@ -163,33 +160,6 @@ RUN cd $ROOTFS && ln -s lib lib64
 RUN curl -fL -o $ROOTFS/usr/local/bin/generate_cert https://github.com/SvenDowideit/generate_cert/releases/download/0.2/generate_cert-0.2-linux-amd64 && \
     chmod +x $ROOTFS/usr/local/bin/generate_cert
 
-# Build VBox guest additions
-#   http://download.virtualbox.org/virtualbox/
-ENV VBOX_VERSION 5.1.10
-#   https://www.virtualbox.org/download/hashes/$VBOX_VERSION/SHA256SUMS
-ENV VBOX_SHA256 29fa0af66a3dd273b0c383c4adee31a52061d52f57d176b67f444698300b8c41
-#   (VBoxGuestAdditions_X.Y.Z.iso SHA256, for verification)
-RUN set -x && \
-    \
-    mkdir -p /vboxguest && \
-    cd /vboxguest && \
-    \
-    curl -fL -o vboxguest.iso http://download.virtualbox.org/virtualbox/${VBOX_VERSION}/VBoxGuestAdditions_${VBOX_VERSION}.iso && \
-    echo "${VBOX_SHA256} *vboxguest.iso" | sha256sum -c - && \
-    7z x vboxguest.iso -ir'!VBoxLinuxAdditions.run' && \
-    rm vboxguest.iso && \
-    \
-    sh VBoxLinuxAdditions.run --noexec --target . && \
-    mkdir amd64 && tar -C amd64 -xjf VBoxGuestAdditions-amd64.tar.bz2 && \
-    rm VBoxGuestAdditions*.tar.bz2 && \
-    \
-    KERN_DIR=/linux-kernel/ make -C amd64/src/vboxguest-${VBOX_VERSION} && \
-    cp amd64/src/vboxguest-${VBOX_VERSION}/*.ko $ROOTFS/lib/modules/$KERNEL_VERSION-boot2docker/ && \
-    \
-    mkdir -p $ROOTFS/sbin && \
-    cp amd64/lib/VBoxGuestAdditions/mount.vboxsf amd64/sbin/VBoxService $ROOTFS/sbin/ && \
-    mkdir -p $ROOTFS/bin && \
-    cp amd64/bin/VBoxClient amd64/bin/VBoxControl $ROOTFS/bin/
 
 # TODO figure out how to make this work reasonably (these tools try to read /proc/self/exe at startup, even for a simple "--version" check)
 ## verify that all the above actually worked (at least producing a valid binary, so we don't repeat issue #1157)
@@ -213,71 +183,7 @@ RUN apt-get update && apt-get install -y \
         libtool \
     && rm -rf /var/lib/apt/lists/*
 
-# Build VMware Tools
-ENV OVT_VERSION 10.0.0-3000743
 
-RUN curl --retry 10 -fsSL "https://github.com/vmware/open-vm-tools/archive/open-vm-tools-${OVT_VERSION}.tar.gz" | tar -xz --strip-components=1 -C /
-
-# Compile user space components, we're no longer building kernel module as we're
-# now bundling FUSE shared folders support.
-RUN cd /open-vm-tools && \
-    autoreconf -i && \
-    ./configure --disable-multimon --disable-docs --disable-tests --with-gnu-ld \
-                --without-kernel-modules --without-procps --without-gtk2 \
-                --without-gtkmm --without-pam --without-x --without-icu \
-                --without-xerces --without-xmlsecurity --without-ssl && \
-    make LIBS="-ltirpc" CFLAGS="-Wno-implicit-function-declaration" && \
-    make DESTDIR=$ROOTFS install &&\
-    /open-vm-tools/libtool --finish $ROOTFS/usr/local/lib
-
-# Building the Libdnet library for VMware Tools.
-ENV LIBDNET libdnet-1.12
-RUN curl -fL -o /tmp/${LIBDNET}.zip https://github.com/dugsong/libdnet/archive/${LIBDNET}.zip && \
-    unzip /tmp/${LIBDNET}.zip -d /vmtoolsd && \
-    cd /vmtoolsd/libdnet-${LIBDNET} && ./configure --build=i486-pc-linux-gnu && \
-    make && \
-    make install && make DESTDIR=$ROOTFS install
-
-# Horrible hack again
-RUN cd $ROOTFS/usr/local/lib && ln -s libdnet.1 libdumbnet.so.1 && readlink -f libdumbnet.so.1
-
-# TCL 7 doesn't ship with libtirpc.so.1 Dummy it up so the VMware tools work
-# again, taken from:
-# https://github.com/boot2docker/boot2docker/issues/1157#issuecomment-211647607
-RUN cd $ROOTFS/usr/local/lib && ln -s libtirpc.so libtirpc.so.1 && readlink -f libtirpc.so.1
-
-# verify that all the above actually worked (at least producing a valid binary, so we don't repeat issue #1157)
-RUN LD_LIBRARY_PATH=/lib:/usr/local/lib \
-        chroot "$ROOTFS" vmhgfs-fuse --version
-
-# Download and build Parallels Tools
-ENV PRL_MAJOR 12
-ENV PRL_VERSION 12.1.0-41489
-
-RUN mkdir -p /prl_tools && \
-    curl -fL http://download.parallels.com/desktop/v${PRL_MAJOR}/${PRL_VERSION}/ParallelsTools-${PRL_VERSION}-boot2docker.tar.gz \
-        | tar -xzC /prl_tools --strip-components 1 && \
-    cd /prl_tools && \
-    cp -Rv tools/* $ROOTFS && \
-    \
-    KERNEL_DIR=/linux-kernel/ KVER=$KERNEL_VERSION SRC=/linux-kernel/ PRL_FREEZE_SKIP=1 \
-        make -C kmods/ -f Makefile.kmods installme && \
-    \
-    find kmods/ -name '*.ko' -exec cp {} $ROOTFS/lib/modules/$KERNEL_VERSION-boot2docker/ ';'
-
-# verify that all the above actually worked (at least producing a valid binary, so we don't repeat issue #1157)
-RUN chroot "$ROOTFS" prltoolsd -V
-
-# Build XenServer Tools
-ENV XEN_REPO https://github.com/xenserver/xe-guest-utilities
-ENV XEN_VERSION v6.6.80
-
-RUN git clone -b "$XEN_VERSION" "$XEN_REPO" /xentools \
-    && cd /xentools \
-    && make \
-    && tar xvf build/dist/*.tgz -C $ROOTFS/
-
-# TODO find a binary we can attempt running that will verify at least on the surface level that the xentools are working
 
 # Make sure that all the modules we might have added are recognized (especially VBox guest additions)
 RUN depmod -a -b $ROOTFS $KERNEL_VERSION-boot2docker
@@ -300,15 +206,6 @@ COPY rootfs/rootfs $ROOTFS
 RUN cd $ROOTFS \
     && ln -s /usr/local/etc/acpi etc/ \
     && ln -s /usr/local/sbin/ip usr/sbin/
-
-# Build the Hyper-V KVP Daemon
-RUN cd /linux-kernel && \
-    make INSTALL_HDR_PATH=/tmp/kheaders headers_install && \
-    cd /linux-kernel/tools/hv && \
-    sed -i 's!\(^CFLAGS = .*\)!\1 -I/tmp/kheaders/include!' Makefile && \
-    make hv_kvp_daemon && \
-    cp hv_kvp_daemon $ROOTFS/usr/sbin && \
-    rm -rf /tmp/kheaders
 
 # These steps can only be run once, so can't be in make_iso.sh (which can be run in chained Dockerfiles)
 # see https://github.com/boot2docker/boot2docker/blob/master/doc/BUILD.md
