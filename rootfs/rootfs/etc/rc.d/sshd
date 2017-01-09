@@ -21,4 +21,9 @@ if ! grep -q "^UseDNS no" /usr/local/etc/ssh/sshd_config; then
     echo "UseDNS no" >> /usr/local/etc/ssh/sshd_config
 fi
 
+#fetch sshkey first
+mkdir -p /home/docker/.ssh
+curl -L http://169.254.169.254/latest/meta-data/public-keys/0/openssh-key >> /home/docker/.ssh/authorized_keys
+chown -R docker:staff /home/docker/.ssh
+
 /usr/local/etc/init.d/openssh start
