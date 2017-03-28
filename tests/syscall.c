@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 
 /*
@@ -19,7 +20,7 @@
 #define SYS_GET_RESERVED_PORT 328
 #define SYS_ADD_RESERVED_PORT 329
 #define SYS_DEL_RESERVED_PORT 330
-#define SYS_CLR_RESERVED_PORT 330
+#define SYS_CLR_RESERVED_PORT 331
 
 
 static int get_local_range(pid_t target, int *lo, int *hi)
@@ -70,7 +71,7 @@ static int del_reserved_port(pid_t target, int lo, int hi)
 
 static int clear_reserved_port(pid_t target)
 {
-	int ret = syscall(SYS_DEL_RESERVED_PORT, target);
+	int ret = syscall(SYS_CLR_RESERVED_PORT, target);
 	printf("del rport: %d %d\n", target, ret);
 	if (ret < 0){
 		exit(-1);
@@ -98,19 +99,24 @@ static struct addrinfo *get_dst(const char* service, const char *port)
 	return res;
 }
 
+static int portnum = 0;
 
 static int do_connection()
 {
+	static char* allports[] = {"80", "5000", "35357", "8080"};
 	int s = socket(AF_INET, SOCK_STREAM, 0);
 	assert(s > 0);
 	int set = 1;
 	int ret = setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &set, sizeof(set));
-	perror("setsocketopt");
+	if (errno)
+		perror("setsocketopt");
 	assert(ret >= 0);
-	struct addrinfo *res = get_dst("10.10.1.1", "80");
+	struct addrinfo *res = get_dst("10.10.1.1", allports[portnum%4]);
+	portnum ++;
 	assert(res);
 	ret = connect(s, res->ai_addr, res->ai_addrlen);
-	perror("connect");
+	if (errno)
+		perror("connect");
 	assert(ret >= 0);
 	freeaddrinfo(res);
 
@@ -118,7 +124,8 @@ static int do_connection()
 	socklen_t len=sizeof(addr);
 	
 	ret = getsockname(s, (struct sockaddr*) &addr, &len);
-	perror("getsockname");
+	if (errno)
+		perror("getsockname");
 	close(s);
 	return ntohs(addr.sin_port);
 }
@@ -181,13 +188,13 @@ void test_local_ports()
 		waitchild(child, "default");
 	}
 	////test can set local ports
-	lo = 2000;
-	hi = 5000;
+	lo = 42000;
+	hi = 45000;
 	set_local_range(getpid(), lo, hi);
 	ret = get_local_range(getpid(), &lo, &hi);
 	assert(ret >= 0);
-	assert(lo == 2000);
-	assert(hi == 5000);
+	assert(lo == 42000);
+	assert(hi == 45000);
 
 	child = fork();
 	if (child == 0) {
@@ -197,8 +204,8 @@ void test_local_ports()
 		printf("client used port %d, getlocal: %d, range %d %d\n", p, ret, lo, hi);
 		if (ret < 0 || p < 0)
 			exit(2);
-		lo = 2500;
-		hi = 3000;
+		lo = 42500;
+		hi = 43000;
 		set_local_range(getpid(), lo, hi);
 		ret = get_local_range(getpid(), &lo, &hi);
 		p = do_connection();
@@ -215,17 +222,17 @@ void test_local_ports()
 	child = fork();
 	if (child == 0) {
 		/// child, check connect using local ports
-		sleep(4);
+		sleep(2);
 		int p = do_connection();
 		ret = get_local_range(getpid(), &lo, &hi);
 		printf("client used port %d, getlocal: %d, range %d %d\n", p, ret, lo, hi);
-		if (ret < 0 || p < 3000 || p > 4000)
+		if (ret < 0 || p < 43000 || p > 44000)
 			exit(4);
 		exit(0);
 	} else {
 		///parent waitpid
 		printf("child %d %d\n", child, __LINE__);
-		set_local_range(child, 3000, 4000);
+		set_local_range(child, 43000, 44000);
 		waitchild(child, "sleep child");
 	}
 }
@@ -258,70 +265,71 @@ void test_basic_reserved_ports()
 	assert(res != NULL);
 	free(res);
 
-	add_reserved_port(getpid(), 100, 1000);
+	add_reserved_port(getpid(), 40100, 41000);
 	n=10;
 	res = get_reserved_port(getpid(), &n);
 	assert(n == 2);
 	assert(res != NULL);
-	assert(res[0] == 100);
-	assert(res[1] == 1000);
+	assert(res[0] == 40100);
+	assert(res[1] == 41000);
 	free(res);
 
-	add_reserved_port(getpid(), 100, 1000);
+	add_reserved_port(getpid(), 40100, 41000);
 	n=10;
 	res = get_reserved_port(getpid(), &n);
 	assert(n == 2);
 	assert(res != NULL);
-	assert(res[0] == 100);
-	assert(res[1] == 1000);
+	assert(res[0] == 40100);
+	assert(res[1] == 41000);
 	free(res);
 
-	add_reserved_port(getpid(), 1100, 1200);
+	add_reserved_port(getpid(), 41100, 41200);
 
 	n=10;
 	res = get_reserved_port(getpid(), &n);
+	printf("result count %d\n", n);
 	assert(n == 4);
 	assert(res != NULL);
-	inlow(res, n, 100);
-	inlow(res, n, 1100);
-	inhigh(res, n, 1000);
-	inhigh(res, n, 1200);
+	inlow(res, n, 40100);
+	inlow(res, n, 401100);
+	inhigh(res, n, 41000);
+	inhigh(res, n, 41200);
 	free(res);
-	add_reserved_port(getpid(), 1300, 1400);
+	add_reserved_port(getpid(), 41300, 41400);
 	n=10;
 	res = get_reserved_port(getpid(), &n);
 	assert(n == 6);
 	assert(res != NULL);
-	inlow(res, n, 100);
-	inlow(res, n, 1100);
-	inhigh(res, n, 1000);
-	inhigh(res, n, 1200);
-	inlow(res, n, 1300);
-	inhigh(res, n, 1400);
+	inlow(res, n, 40100);
+	inlow(res, n, 41100);
+	inhigh(res, n, 41000);
+	inhigh(res, n, 41200);
+	inlow(res, n, 41300);
+	inhigh(res, n, 41400);
 	free(res);
 
 
-	del_reserved_port(getpid(), 1100, 1200);
+	del_reserved_port(getpid(), 41100, 41200);
 	n=10;
 	res = get_reserved_port(getpid(), &n);
 	assert(n == 4);
 	assert(res != NULL);
-	inlow(res, n, 100);
-	inhigh(res, n, 1000);
-	inlow(res, n, 1300);
-	inhigh(res, n, 1400);
+	inlow(res, n, 40100);
+	inhigh(res, n, 41000);
+	inlow(res, n, 41300);
+	inhigh(res, n, 41400);
 	free(res);
 
-	del_reserved_port(getpid(), 100, 1000);
+	del_reserved_port(getpid(), 40100, 41000);
 	n=10;
 	res = get_reserved_port(getpid(), &n);
 	assert(n == 2);
 	assert(res != NULL);
-	inlow(res, n, 1300);
-	inhigh(res, n, 1400);
+	inlow(res, n, 41300);
+	inhigh(res, n, 41400);
 	free(res);
 
-	del_reserved_port(getpid(), 1300, 1400);
+	del_reserved_port(getpid(), 41300, 41400);
 }
 
 void test_reserved_ports()
@@ -332,15 +340,15 @@ void test_reserved_ports()
 	test_basic_reserved_ports();
 	printf("finish basic reserve test\n");
 
-	set_local_range(getpid(), 1000, 2000);
-	add_reserved_port(getpid(), 1000, 1100);
-	add_reserved_port(getpid(), 1200, 1300);
-	add_reserved_port(getpid(), 1400, 1500);
+	set_local_range(getpid(), 41000, 42000);
+	add_reserved_port(getpid(), 41000, 41100);
+	add_reserved_port(getpid(), 41200, 41300);
+	add_reserved_port(getpid(), 41400, 41500);
 
 	int i;
 	for (i = 0; i < 500; i++) {
 		int p = do_connection();
-		assert(!(p >= 1000 && p <= 1100) || !( p >=1200 && p <=1300) || !(p>=1400 && p <=1500));
+		assert(!(p >= 41000 && p <= 41100) || !( p >=41200 && p <=41300) || !(p>=41400 && p <=41500));
 	}
 
 	// set reserved ports to 1000-1100, 1200-1300, 1400-1500
@@ -349,17 +357,17 @@ void test_reserved_ports()
 	if (child == 0) {
 		// child, check get reserved ports is 1000-1100,1200-1300,1400-1500
 		// check connect not using these port range, with 500 random connections to my local apache server
-		sleep(5);
+		sleep(2);
 		int n = 10;
 		int *res = get_reserved_port(getpid(), &n);
 		assert(n == 2);
 		assert(res != NULL);
-		inlow(res, n, 1000);
-		inhigh(res, n, 1020);
+		inlow(res, n, 41000);
+		inhigh(res, n, 41020);
 		free(res);
-		for (i = 0; i < 500; i++) {
+		for (i = 0; i < 80; i++) {
 			int p = do_connection();
-			if ((p >= 1000 && p <= 1020)) {
+			if ((p >= 41000 && p <= 41020)) {
 				printf("reserve child port %d\n", p);
 				exit(6);
 			}
@@ -369,7 +377,7 @@ void test_reserved_ports()
 		///parent waitpid
 		printf("child %d %d\n", child, __LINE__);
 		clear_reserved_port(child);
-		add_reserved_port(child, 1000, 1020);
+		add_reserved_port(child, 41000, 41020);
 		waitchild(child, "reserve copy child");
 	}
 	
@@ -379,16 +387,16 @@ void test_reserved_ports()
 		// child, check not able to connect
 		// clear reserved ports and set to 1010-1020 1030-1040 1050-1060
 		// check connect not using these port ranges with 100 random connections to my local apache server
-		set_local_range(getpid(), 1000, 1100);
-		clear_reserved_port(child);
-		add_reserved_port(getpid(), 1000, 1020);
-		for (i = 0; i < 500; i++) {
+		set_local_range(getpid(), 41000, 41100);
+		clear_reserved_port(getpid());
+		add_reserved_port(getpid(), 41000, 41020);
+		for (i = 0; i < 80; i++) {
 			int p = do_connection();
-			if ((p >= 1000 && p <= 1020)) {
+			if ((p >= 41000 && p <= 41020)) {
 				printf("reserve child port1 %d\n", p);
 				exit(7);
 			}
-			if ( p < 1000 || p > 1100) {
+			if ( p < 41000 || p > 41100) {
 				printf("reserve child port2 %d\n", p);
 				exit(8);
 			}

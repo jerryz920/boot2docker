@@ -1,5 +1,6 @@
 cd linux
 bash rebuild.sh
+cd ..
 docker build -t boot2docker .
 docker run boot2docker > boot2docker.iso
 
