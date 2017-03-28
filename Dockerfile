@@ -17,46 +17,52 @@ RUN apt-get update && apt-get -y install  unzip \
                         isolinux \
                         automake \
                         pkg-config \
-                        p7zip-full
+                        p7zip-full \
+			faketime
 
 # https://www.kernel.org/
 ENV KERNEL_VERSION  4.4.39
 
 # Fetch the kernel sources
-RUN curl --retry 10 https://www.kernel.org/pub/linux/kernel/v${KERNEL_VERSION%%.*}.x/linux-$KERNEL_VERSION.tar.xz | tar -C / -xJ && \
-    mv /linux-$KERNEL_VERSION /linux-kernel
-
-# http://aufs.sourceforge.net/
-ENV AUFS_REPO       https://github.com/sfjro/aufs4-standalone
-ENV AUFS_BRANCH     aufs4.4
-ENV AUFS_COMMIT     45192fd8c7c447090b990953c62760dc18508dd7
-# we use AUFS_COMMIT to get stronger repeatability guarantees
-
-# Download AUFS and apply patches and files, then remove it
-RUN git clone -b "$AUFS_BRANCH" "$AUFS_REPO" /aufs-standalone && \
-    cd /aufs-standalone && \
-    git checkout -q "$AUFS_COMMIT" && \
-    cd /linux-kernel && \
-    cp -r /aufs-standalone/Documentation /linux-kernel && \
-    cp -r /aufs-standalone/fs /linux-kernel && \
-    cp -r /aufs-standalone/include/uapi/linux/aufs_type.h /linux-kernel/include/uapi/linux/ && \
-    set -e && for patch in \
-        /aufs-standalone/aufs*-kbuild.patch \
-        /aufs-standalone/aufs*-base.patch \
-        /aufs-standalone/aufs*-mmap.patch \
-        /aufs-standalone/aufs*-standalone.patch \
-        /aufs-standalone/aufs*-loopback.patch \
-    ; do \
-        patch -p1 < "$patch"; \
-    done
-
-COPY kernel_config /linux-kernel/.config
-
-RUN jobs=$(nproc); \
-    cd /linux-kernel && \
-    make -j ${jobs} oldconfig && \
-    make -j ${jobs} bzImage && \
-    make -j ${jobs} modules
+#RUN curl --retry 10 https://www.kernel.org/pub/linux/kernel/v${KERNEL_VERSION%%.*}.x/linux-$KERNEL_VERSION.tar.xz | tar -C / -xJ && \
+#    mv /linux-$KERNEL_VERSION /linux-kernel
+#
+## http://aufs.sourceforge.net/
+#ENV AUFS_REPO       https://github.com/sfjro/aufs4-standalone
+#ENV AUFS_BRANCH     aufs4.4
+#ENV AUFS_COMMIT     45192fd8c7c447090b990953c62760dc18508dd7
+## we use AUFS_COMMIT to get stronger repeatability guarantees
+#
+## Download AUFS and apply patches and files, then remove it
+#RUN git clone -b "$AUFS_BRANCH" "$AUFS_REPO" /aufs-standalone && \
+#    cd /aufs-standalone && \
+#    git checkout -q "$AUFS_COMMIT" && \
+#    cd /linux-kernel && \
+#    cp -r /aufs-standalone/Documentation /linux-kernel && \
+#    cp -r /aufs-standalone/fs /linux-kernel && \
+#    cp -r /aufs-standalone/include/uapi/linux/aufs_type.h /linux-kernel/include/uapi/linux/ && \
+#    set -e && for patch in \
+#        /aufs-standalone/aufs*-kbuild.patch \
+#        /aufs-standalone/aufs*-base.patch \
+#        /aufs-standalone/aufs*-mmap.patch \
+#        /aufs-standalone/aufs*-standalone.patch \
+#        /aufs-standalone/aufs*-loopback.patch \
+#    ; do \
+#        patch -p1 < "$patch"; \
+#    done
+#
+ADD kernel /linux-kernel
+#COPY linux/boot2docker_kern_config /linux-kernel/.config
+#
+## for reproducible kernel
+#ENV KERNEL_DATE="2015-08-15 17:16:49" KCONFIG_NOTIMESTAMP=1                                                         KBUILD_BUILD_TIMESTAMP="Sat Aug 15 17:16:49 UTC 2015" DEB_BUILD_TIMESTAMP="Sat Aug 15 17:16:49 UTC 2015"                   KBUILD_BUILD_USER=root KBUILD_BUILD_HOST=host ROOT_DEV=FLOPPY FAKETIME_TIME="2015-08-15 17:16:49" KBUILD_BUILD_VERSION=1
+#
+#RUN jobs=$(nproc); \
+#    cd /linux-kernel && \
+#    echo "$KBUILD_BUILD_VERSION" > .version && \
+#    faketime "$KERNEL_DATE" make -j ${jobs} oldconfig && \
+#    faketime "$KERNEL_DATE" make -j ${jobs} bzImage && \
+#    faketime "$KERNEL_DATE" make -j ${jobs} modules
 
 # The post kernel build process
 
@@ -69,8 +75,10 @@ RUN mkdir -p $ROOTFS
 RUN mkdir -p /tmp/iso/boot
 
 # Install the kernel modules in $ROOTFS
-RUN cd /linux-kernel && \
-    make INSTALL_MOD_PATH=$ROOTFS modules_install firmware_install
+#RUN cd /linux-kernel && \
+#    make INSTALL_MOD_PATH=$ROOTFS modules_install firmware_install
+RUN mkdir -p $ROOTFS/lib/modules && \
+       cp -a /linux-kernel/lib/modules/* $ROOTFS/lib/modules/
 
 # Remove useless kernel modules, based on unclejack/debian2docker
 RUN cd $ROOTFS/lib/modules && \
@@ -97,18 +105,16 @@ RUN curl -fL http://http.debian.net/debian/pool/main/libc/libcap2/libcap2_2.22.o
     cp -av `pwd`/output/lib64/* $ROOTFS/usr/local/lib
 
 # Make sure the kernel headers are installed for aufs-util, and then build it
-RUN cd /linux-kernel && \
-    make INSTALL_HDR_PATH=/tmp/kheaders headers_install && \
-    cd / && \
+RUN cd / && \
     git clone https://github.com/Distrotech/aufs-util.git && \
     cd /aufs-util && \
     git checkout 5e0c348bd8b1898beb1e043b026bcb0e0c7b0d54 && \
-    CPPFLAGS="-I/tmp/kheaders/include" CLFAGS=$CPPFLAGS LDFLAGS=$CPPFLAGS make && \
+    CPPFLAGS="-I/linux-kernel/include" CLFAGS=$CPPFLAGS LDFLAGS=$CPPFLAGS make && \
     DESTDIR=$ROOTFS make install && \
-    rm -rf /tmp/kheaders
+    rm -rf /linux-kernel/include
 
 # Prepare the ISO directory with the kernel
-RUN cp -v /linux-kernel/arch/x86_64/boot/bzImage /tmp/iso/boot/vmlinuz64
+RUN cp -v /linux-kernel/vmlinuz-$KERNEL_VERSION-boot2docker /tmp/iso/boot/vmlinuz64
 
 ENV TCL_REPO_BASE   http://distro.ibiblio.org/tinycorelinux/7.x/x86_64
 # Note that the ncurses is here explicitly so that top continues to work
