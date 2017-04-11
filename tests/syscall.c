@@ -244,6 +244,8 @@ static int inlow(int *port, int n, int expect)
 		if (expect == port[i])
 			return 1;
 	}
+	printf("%d not found\n", expect);
+	assert(0);
 	return 0;
 }
 
@@ -254,6 +256,8 @@ static int inhigh(int *port, int n, int expect)
 		if (expect == port[i])
 			return 1;
 	}
+	printf("%d not found\n", expect);
+	assert(0);
 	return 0;
 }
 
@@ -291,7 +295,7 @@ void test_basic_reserved_ports()
 	assert(n == 4);
 	assert(res != NULL);
 	inlow(res, n, 40100);
-	inlow(res, n, 401100);
+	inlow(res, n, 41100);
 	inhigh(res, n, 41000);
 	inhigh(res, n, 41200);
 	free(res);
