@@ -7,6 +7,5 @@ RUN apt-get install -y gdb
 
 COPY syscall.c /opt/
 RUN gcc -g /opt/syscall.c -o /usr/bin/runtest
-ADD a.out /opt/
 
 ENTRYPOINT ["/bin/sh", "-c"]
