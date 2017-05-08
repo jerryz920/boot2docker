@@ -5,7 +5,7 @@ if [[ x"$SCRIPT_HOME" == x"" ]]; then
   source /local/env.sh
   cd $SCRIPT_HOME
 fi
-apt-get install faketime
+apt-get install -y faketime
 
 git clone https://github.com/jerryz920/linux.git /openstack/linux
 ln -s /openstack/linux/ $GOPATH/src/github.com/boot2docker/boot2docker/linux
