@@ -5,10 +5,11 @@ if [[ x"$SCRIPT_HOME" == x"" ]]; then
   source /local/env.sh
   cd $SCRIPT_HOME
 fi
-apt-get install faketime
+apt-get install -y faketime
 
 git clone https://github.com/jerryz920/linux.git /openstack/linux
 ln -s /openstack/linux/ $GOPATH/src/github.com/boot2docker/boot2docker/linux
+mkdir $GOPATH/src/github.com/boot2docker/boot2docker/kernel
 cd $GOPATH/src/github.com/boot2docker/boot2docker/linux
 git checkout -b dev-tapcon-v4.4 origin/dev-tapcon-v4.4
 cp boot2docker_kern_config .config
