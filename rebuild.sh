@@ -5,6 +5,13 @@ cd ..
 docker build -t boot2docker .
 docker run boot2docker > boot2docker.iso
 
+sleep 5
+source adminrc
+# sometimes it bugs out... Just give it some time
+openstack user list -v
+openstack user list -v
+openstack user list -v
+
 source user1rc
 id=`glance image-list | grep docker | awk -F\| '{print $2}' | tr -d \ `
 glance image-delete $id

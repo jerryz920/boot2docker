@@ -20,3 +20,9 @@ faketime "$KERNEL_DATE" make -j 14
 faketime "$KERNEL_DATE" make -j 14 bzImage
 faketime "$KERNEL_DATE" make -j 14 modules
 
+sleep 5
+source adminrc
+# sometimes it bugs out... Just give it some time
+openstack user list -v
+openstack user list -v
+openstack user list -v
