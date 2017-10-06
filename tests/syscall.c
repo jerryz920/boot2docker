@@ -186,7 +186,7 @@ static int clear_reserved_port(pid_t target)
 }
 
 static int alloc_local_ports(pid_t p, int n) {
-        return syscall(SYS_ALLOC_LOCAL_PORT, p, n);
+        return syscall(SYS_ALLOC_LOCAL_PORT, 0, p, n);
 }
 
 
