@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <string.h>
 #include <fcntl.h>
 
 
@@ -590,6 +591,8 @@ void test_allocate_ports()
             exit(0);
         } else {
             int base = alloc_local_ports(child, 20);
+            if (base < 0) 
+              fprintf(stderr, "erorr? %s\n", strerror(-base));
             int n = 10;
             int *res = get_reserved_port(0, &n);
             fprintf(stderr, "reserve port count %d\n", n);
@@ -629,10 +632,8 @@ int main()
 {
         time_t s = time(0);
 	printf("parent %d %lu\n", getpid(), s);
-	test_local_ports();
-        sleep(1);
-	test_reserved_ports();
-        sleep(1);
+//	test_local_ports();
+//	test_reserved_ports();
         test_allocate_ports();
 	return 0;
 }
