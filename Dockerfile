@@ -199,13 +199,16 @@ RUN cp -v $ROOTFS/etc/version /tmp/iso/version
 
 # Get the Docker binaries with version that matches our boot2docker version.
 COPY tmpdocker.tgz /tmp/dockerbin.tgz
+COPY tmpdockerlib.tgz /tmp/dockerlib.tgz
 
-RUN ls -l /tmp/dockerbin.tgz
+RUN mkdir -p $ROOTFS/opt/lib && mkdir -p $ROOTFS/var/run/docker-btrace/ && \
+	tar -zxvf /tmp/dockerlib.tgz -C "$ROOTFS/opt/lib" --strip-components=1 && \
+	ls $ROOTFS/opt/lib/
 
 #RUN curl -fSL -o /tmp/dockerbin.tgz https://get.docker.com/builds/Linux/x86_64/docker-$(cat $ROOTFS/etc/version).tgz && \
 RUN tar -zxvf /tmp/dockerbin.tgz -C "$ROOTFS/usr/local/bin" --strip-components=1 && \
     rm /tmp/dockerbin.tgz && \
-    chroot "$ROOTFS" docker -v
+    cp $ROOTFS/usr/local/bin/strace $ROOTFS/usr/bin/
 
 # Copy our custom rootfs
 COPY rootfs/rootfs $ROOTFS
