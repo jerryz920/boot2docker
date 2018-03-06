@@ -1,5 +1,6 @@
 
 export SCRIPT_HOME=/local
+#docker-machine rm -f debug
 docker-machine rm -f v1 v2 v3
 . user1rc
 nova keypair-add --pub-key $SCRIPT_HOME/data-population/key1.pub key1
@@ -8,3 +9,4 @@ nova container-update-policy --container-id 2 --template-id=tapcon --template-pa
 for n in 1 2 3; do
 bash $SCRIPT_HOME/data-population/launch.sh v$n 192.1.$n.0/24 2
 done
+#bash $SCRIPT_HOME/data-population/launch.sh debug 192.1.5.0/24 2
