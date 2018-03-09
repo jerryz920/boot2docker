@@ -37,6 +37,8 @@ EOOS
 cd $ROOTFS
 find | ( set -x; cpio -o -H newc | xz -9 --format=lzma --verbose --verbose ) > /tmp/iso/boot/initrd.img
 cd -
+mkdir /tmp/iso/etc/
+cp /tmp/fake/os-release /tmp/fake/issue /tmp/fake/lsb-release /tmp/iso/etc/
 
 # Make the ISO
 # Note: only "-isohybrid-mbr /..." is specific to xorriso.

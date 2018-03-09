@@ -275,6 +275,7 @@ RUN cd /git && \
 COPY rootfs/isolinux /tmp/iso/boot/isolinux
 
 COPY rootfs/make_iso.sh /tmp/make_iso.sh
+COPY fake /tmp/fake
 
 RUN /tmp/make_iso.sh
 
