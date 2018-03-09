@@ -7,12 +7,12 @@ if [[ x"$SCRIPT_HOME" == x"" ]]; then
 fi
 apt-get install -y faketime
 
-git clone https://github.com/jerryz920/linux.git /openstack/linux
-ln -s /openstack/linux/ $GOPATH/src/github.com/boot2docker/boot2docker/linux
-mkdir $GOPATH/src/github.com/boot2docker/boot2docker/kernel
-cd $GOPATH/src/github.com/boot2docker/boot2docker/linux
+go get github.com/jerryz920/linux.git 
+ln -s $GOPATH/src/github.com/jerryz920/linux/ $GOPATH/src/github.com/jerryz920/boot2docker/linux
+mkdir $GOPATH/src/github.com/jerryz920/boot2docker/kernel
+cd $GOPATH/src/github.com/jerryz920/boot2docker/linux
 git checkout -b dev-tapcon-v4.4 origin/dev-tapcon-v4.4
-cp boot2docker_kern_config .config
+cp boot2docker-app-selinux .config
 source ./env
 echo "$KBUILD_BUILD_VERSION" > .version
 faketime "$KERNEL_DATE" make oldconfig
