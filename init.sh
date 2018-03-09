@@ -7,7 +7,7 @@ if [[ x"$SCRIPT_HOME" == x"" ]]; then
 fi
 apt-get install -y faketime
 
-go get github.com/jerryz920/linux.git 
+go get github.com/jerryz920/linux
 ln -s $GOPATH/src/github.com/jerryz920/linux/ $GOPATH/src/github.com/jerryz920/boot2docker/linux
 mkdir $GOPATH/src/github.com/jerryz920/boot2docker/kernel
 cd $GOPATH/src/github.com/jerryz920/boot2docker/linux
