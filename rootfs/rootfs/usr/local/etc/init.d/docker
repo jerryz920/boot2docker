@@ -27,7 +27,25 @@ test -f '/var/lib/boot2docker/profile' && . '/var/lib/boot2docker/profile'
 # Add /usr/local/sbin to the path.
 export PATH=${PATH}:/usr/local/sbin
 
+start_attguard() {
+  killall attguard 2>/dev/null
+  local_ip=`curl -L http://169.254.169.254/latest/meta-data/local-ipv4`
+  mkdir -p /etc/attguard/
+  mkdir -p /var/run/libport-debug/
+cat > /etc/attguard/config.txt <<EOF
+speaker_id = $local_ip:1-65535
+speaker_ip = $local_ip
+run_as_iaas = false
+metadata_ip = 10.10.1.1
+metadata_port = 19851
+daemon_socket = /var/run/attguard.sock
+log = debug
+EOF
+  attguard-daemon
+}
+
 start() {
+    start_attguard
     if [ ! -e "/etc/docker" ]; then
         echo "Linking /etc/docker to /var/lib/boot2docker for persistence"
         mkdir -p "/var/lib/boot2docker/etc/docker"
