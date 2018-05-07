@@ -9,4 +9,4 @@ nova container-update-policy --container-id 2 --template-id=tapcon --template-pa
 #for n in 1 2 3; do
 #bash $SCRIPT_HOME/data-population/launch.sh v$n 192.1.$n.0/24 2
 #done
-bash $SCRIPT_HOME/data-population/launch.sh debug 192.1.5.0/24 2
+bash $SCRIPT_HOME/data-population/launch.sh debug 5 2
